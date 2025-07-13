@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ document.title }}</h2>
+
+<div class="mb-3">
+    <textarea id="editor" class="form-control" rows="15">{{ document.content }}</textarea>
+</div>
+
+<div id="suggestions" class="mt-3">
+    <h5>AI Suggestions:</h5>
+    <div id="suggestions-list">
+        <p><i>No suggestions yet. Start typing...</i></p>
+    </div>
+</div>
+
+<script>
+    const docId = "{{ document.id }}";
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(
+        wsProtocol + '://' + window.location.host + '/ws/document/' + docId + '/'
+    );
+
+    const editor = document.getElementById('editor');
+    let timeout = null;
+
+    socket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        editor.value = data['content'];
+    };
+
+    editor.addEventListener('input', function() {
+        socket.send(JSON.stringify({'content': editor.value}));
+
+        // Debounce AI suggestion request
+        clearTimeout(timeout);
+        timeout = setTimeout(fetchSuggestions, 1000);
+    });
+
+    function fetchSuggestions() {
+        fetch('/ai-suggest/?text=' + encodeURIComponent(editor.value))
+            .then(response => response.json())
+            .then(data => {
+                const suggestionsList = document.getElementById('suggestions-list');
+                suggestionsList.innerHTML = "";
+                if (data.suggestions.length === 0) {
+                    suggestionsList.innerHTML = "<p><i>No issues detected.</i></p>";
+                } else {
+                    data.suggestions.forEach(s => {
+                        suggestionsList.innerHTML += `<p><b>Suggestion:</b> ${s.message}</p>`;
+                    });
+                }
+            });
+    }
+</script>
+{% endblock %}
